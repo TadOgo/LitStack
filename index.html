@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="LitStack">
+<meta name="theme-color" content="#0f172a">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" href="apple-touch-icon.png">
+<title>LitStack</title>
+<style>
+  :root { --bg:#0f172a; --card:#f8f5ef; --ink:#1c2333; --dim:#6b7280; --accent:#f59e0b; --save:#10b981;
+          --line:#e5ded2; --nav:64px; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { margin:0; height:100%; background:var(--bg); color:var(--ink); overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",system-ui,sans-serif; }
+  .screen { position:fixed; left:0; right:0; top:0; bottom:calc(var(--nav) + env(safe-area-inset-bottom)); display:none; }
+  .screen.on { display:block; }
+
+  /* ---------- Today feed ---------- */
+  #feed { height:100%; overflow-y:auto; scroll-snap-type:y mandatory; overscroll-behavior:contain; }
+  .slot { height:100%; scroll-snap-align:start; scroll-snap-stop:always; padding:calc(env(safe-area-inset-top) + 14px) 14px 14px; display:flex; }
+  .card { position:relative; flex:1; background:var(--card); border-radius:22px; padding:20px 20px 16px; display:flex; flex-direction:column;
+    overflow:hidden; transition:transform .25s ease, opacity .25s ease; touch-action:pan-y; }
+  .card.saved::after { content:"Saved ✓"; position:absolute; top:16px; right:16px; background:var(--save); color:#fff; font-weight:700;
+    font-size:13px; padding:5px 10px; border-radius:999px; }
+  .meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:12px; color:var(--dim); margin-bottom:10px; }
+  .src { font-weight:700; color:var(--ink); background:#ece4d6; padding:3px 8px; border-radius:6px; }
+  .src.pre { background:#fde8c8; color:#92400e; }
+  .title { font-family:"New York","Iowan Old Style",Georgia,serif; font-size:clamp(21px,5.8vw,27px); line-height:1.22; font-weight:600; margin:0 0 10px; }
+  .authors { font-size:13px; color:var(--dim); margin-bottom:12px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .abs { font-size:15px; line-height:1.5; color:#30384a; flex:1; overflow:hidden; position:relative; }
+  .abs::after { content:""; position:absolute; left:0; right:0; bottom:0; height:60px; background:linear-gradient(transparent, var(--card)); }
+  .why { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0 12px; }
+  .why span { font-size:11px; padding:3px 8px; border-radius:999px; background:#e7eefc; color:#2747a0; }
+  .acts { display:flex; gap:8px; }
+  .acts button, .acts a { flex:1; border:0; border-radius:12px; padding:12px 8px; font-size:15px; font-weight:600; text-align:center; text-decoration:none; }
+  .b-save { background:var(--ink); color:#fff; }
+  .b-save.on { background:var(--save); }
+  .b-note { background:#ece4d6; color:var(--ink); }
+  .notechip { font-size:13px; color:#5b4a1f; background:#fdf3d8; border-radius:10px; padding:8px 10px; margin:0 0 12px;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .title, .abs, .authors, .sheet p, .sheet .title { -webkit-user-select:text; user-select:text; }
+  .sheet textarea { width:100%; min-height:140px; border-radius:12px; border:1px solid var(--line); background:#fff; color:var(--ink);
+    font-size:16px; padding:12px; font-family:inherit; line-height:1.4; margin:6px 0 12px; }
+  .sheet .lbl { font-size:13px; font-weight:600; color:var(--dim); }
+  .sheet .acts .b-save { flex:2; }
+  .item .n { color:#fcd34d; font-size:13px; margin-top:6px; white-space:pre-wrap; }
+  .b-open { background:#ece4d6; color:var(--ink); }
+  .count { text-align:center; font-size:11px; color:#9aa1ad; margin-top:10px; }
+  .hint { font-size:12px; color:#9aa1ad; text-align:center; margin-top:8px; }
+
+  .center { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; color:#e2e8f0; padding:20px; gap:14px; }
+  .center h2 { margin:0; font-size:26px; }
+  .center p { margin:0; color:#94a3b8; font-size:15px; line-height:1.5; max-width:320px; }
+  .big { font-size:54px; }
+  .pill { border:0; border-radius:12px; padding:12px 20px; font-size:15px; font-weight:600; background:var(--accent); color:#1c1300; }
+  .pill.ghost { background:#1e293b; color:#e2e8f0; }
+  .spinner { width:34px; height:34px; border:3px solid #334155; border-top-color:var(--accent); border-radius:50%; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+
+  /* ---------- Saved & Settings ---------- */
+  .page { height:100%; overflow-y:auto; padding:calc(env(safe-area-inset-top) + 16px) 16px 24px; color:#e2e8f0; }
+  .page h1 { font-size:28px; margin:4px 0 4px; }
+  .page .sub { color:#94a3b8; font-size:14px; margin-bottom:16px; }
+  .row { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .item { background:#1e293b; border-radius:14px; padding:12px 14px; margin-bottom:10px; }
+  .item .t { font-weight:600; font-size:15px; line-height:1.3; }
+  .item .m { color:#94a3b8; font-size:12px; margin-top:4px; }
+  .item .x { display:flex; gap:14px; margin-top:8px; font-size:13px; }
+  .item .x a, .item .x button { color:var(--accent); background:none; border:0; padding:0; font-size:13px; text-decoration:none; }
+  label.f { display:block; font-size:13px; font-weight:600; color:#cbd5e1; margin:16px 0 6px; }
+  .help { font-size:12px; color:#94a3b8; margin-bottom:6px; line-height:1.4; }
+  textarea, select, input[type=number] { width:100%; border-radius:12px; border:1px solid #334155; background:#0b1222; color:#e2e8f0;
+    font-size:16px; padding:10px 12px; font-family:inherit; }
+  textarea { min-height:110px; resize:vertical; line-height:1.4; }
+  .switch { display:flex; align-items:center; justify-content:space-between; background:#1e293b; border-radius:12px; padding:12px 14px; margin-top:16px; font-size:15px; }
+  .switch input { width:22px; height:22px; }
+  .toast { position:fixed; left:50%; bottom:calc(var(--nav) + env(safe-area-inset-bottom) + 16px); transform:translate(-50%, 20px); opacity:0;
+    background:#111827; color:#fff; padding:10px 16px; border-radius:999px; font-size:14px; transition:.25s; pointer-events:none; z-index:20; }
+  .toast.on { opacity:1; transform:translate(-50%, 0); }
+
+  /* ---------- sheet (full abstract) ---------- */
+  .sheet { position:fixed; inset:0; background:rgba(0,0,0,.55); display:none; z-index:30; }
+  .sheet.on { display:block; }
+  .sheet .in { position:absolute; left:0; right:0; bottom:0; max-height:86%; overflow-y:auto; background:var(--card); border-radius:20px 20px 0 0;
+    padding:20px 20px calc(24px + env(safe-area-inset-bottom)); }
+  .sheet .grab { width:40px; height:5px; border-radius:3px; background:#d6cdbd; margin:0 auto 14px; }
+  .sheet p { font-size:16px; line-height:1.55; color:#30384a; }
+
+  /* ---------- nav ---------- */
+  nav { position:fixed; left:0; right:0; bottom:0; height:calc(var(--nav) + env(safe-area-inset-bottom)); padding-bottom:env(safe-area-inset-bottom);
+    background:#0b1222; border-top:1px solid #1e293b; display:flex; }
+  nav button { flex:1; background:none; border:0; color:#64748b; font-size:11px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; }
+  nav button svg { width:24px; height:24px; fill:currentColor; }
+  nav button.on { color:var(--accent); }
+  .badge { background:var(--accent); color:#1c1300; border-radius:999px; font-size:10px; font-weight:700; padding:1px 6px; margin-left:2px; }
+</style>
+</head>
+<body>
+
+<section class="screen on" id="s-today"><div id="feed"></div></section>
+
+<section class="screen" id="s-saved">
+  <div class="page">
+    <h1>Saved</h1>
+    <div class="sub" id="savedSub"></div>
+    <div class="row">
+      <button class="pill" id="shareBtn">Share list</button>
+      <button class="pill ghost" id="emailBtn">Email</button>
+      <button class="pill ghost" id="copyBtn">Copy</button>
+    </div>
+    <div id="savedList"></div>
+    <div class="row" style="margin-top:8px"><button class="pill ghost" id="clearBtn">Clear all</button></div>
+  </div>
+</section>
+
+<section class="screen" id="s-settings">
+  <div class="page">
+    <h1>Your field</h1>
+    <div class="sub">LitStack builds each day's stack from these. Papers matching more of them come first.</div>
+
+    <label class="f" for="kw">Topics &amp; keywords</label>
+    <div class="help">One per line. Phrases are matched exactly in titles and abstracts.</div>
+    <textarea id="kw"></textarea>
+
+    <label class="f" for="au">Authors / labs to follow</label>
+    <div class="help">One per line, as “Lastname Initials”, e.g. Ogorzalek T.</div>
+    <textarea id="au" style="min-height:80px"></textarea>
+
+    <label class="f" for="jr">Journals to watch</label>
+    <div class="help">One per line. Leave empty to search everywhere. Journals only boost ranking unless you turn on “Journals only”.</div>
+    <textarea id="jr" style="min-height:80px"></textarea>
+
+    <div class="switch"><span>Include preprints (bioRxiv, medRxiv…)</span><input type="checkbox" id="pre"></div>
+    <div class="switch"><span>Journals only</span><input type="checkbox" id="jonly"></div>
+
+    <label class="f" for="days">Look back</label>
+    <select id="days"><option value="3">3 days</option><option value="7">7 days</option><option value="14">14 days</option><option value="30">30 days</option></select>
+
+    <label class="f" for="size">Papers per day</label>
+    <select id="size"><option>10</option><option>15</option><option>20</option><option>30</option></select>
+
+    <div class="row" style="margin-top:20px">
+      <button class="pill" id="saveSettings">Save &amp; build today’s stack</button>
+    </div>
+    <div class="help" style="margin-top:12px">Data from Europe PMC (PubMed + preprints). Everything is stored only on this device.</div>
+  </div>
+</section>
+
+<div class="sheet" id="sheet"><div class="in" id="sheetIn"></div></div>
+<div class="toast" id="toast"></div>
+
+<nav>
+  <button data-s="today" class="on"><svg viewBox="0 0 24 24"><path d="M4 6h16v3H4zm0 5h16v3H4zm0 5h16v3H4z" opacity=".35"/><path d="M4 4h16v5H4z"/></svg>Today</button>
+  <button data-s="saved"><svg viewBox="0 0 24 24"><path d="M6 3h12a1 1 0 0 1 1 1v17l-7-4-7 4V4a1 1 0 0 1 1-1z"/></svg><span>Saved<span class="badge" id="savedBadge" hidden></span></span></button>
+  <button data-s="settings"><svg viewBox="0 0 24 24"><path d="M19.4 13a7.5 7.5 0 0 0 0-2l2-1.6-2-3.4-2.4 1a7.6 7.6 0 0 0-1.7-1L15 3h-4l-.4 2.6a7.6 7.6 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.5 7.5 0 0 0 0 2l-2 1.6 2 3.4 2.4-1c.5.4 1.1.7 1.7 1L11 21h4l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.4-2-1.6zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>Your field</button>
+</nav>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const store = {
+    get(k, d) { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+  };
+  const today = () => new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
+  const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' }[c]));
+
+  // ---------- settings ----------
+  const DEFAULTS = {
+    kw: ['laboratory automation', 'high-throughput screening', 'acoustic liquid handling', 'self-driving laboratory', 'cell-based assay', 'lab robotics'],
+    au: [], jr: ['SLAS Technology', 'SLAS Discovery'],
+    pre: true, jonly: false, days: 7, size: 20
+  };
+  let cfg = { ...DEFAULTS, ...store.get('ls.cfg', {}) };
+  const lines = s => s.split('\n').map(x => x.trim()).filter(Boolean);
+
+  function fillSettings() {
+    $('kw').value = cfg.kw.join('\n'); $('au').value = cfg.au.join('\n'); $('jr').value = cfg.jr.join('\n');
+    $('pre').checked = cfg.pre; $('jonly').checked = cfg.jonly;
+    $('days').value = String(cfg.days); $('size').value = String(cfg.size);
+  }
+  $('saveSettings').onclick = () => {
+    cfg = { kw: lines($('kw').value), au: lines($('au').value), jr: lines($('jr').value),
+            pre: $('pre').checked, jonly: $('jonly').checked, days: +$('days').value, size: +$('size').value };
+    if (!cfg.kw.length && !cfg.au.length && !cfg.jr.length) { toast('Add at least one topic, author or journal'); return; }
+    store.set('ls.cfg', cfg);
+    store.set('ls.stack', null);
+    show('today'); build();
+  };
+
+  // ---------- seen / saved ----------
+  let seen = store.get('ls.seen', {});   // id -> date first shown
+  let saved = store.get('ls.saved', []); // [{id, title, authors, venue, year, url, doi, savedOn}]
+  function pruneSeen() {
+    const cutoff = Date.now() - 90 * 864e5;
+    for (const [k, d] of Object.entries(seen)) if (new Date(d).getTime() < cutoff) delete seen[k];
+    store.set('ls.seen', seen);
+  }
+  const isSaved = id => saved.some(s => s.id === id);
+  function toggleSave(p, card) {
+    if (isSaved(p.id)) { saved = saved.filter(s => s.id !== p.id); toast('Removed from saved'); }
+    else {
+      saved.unshift({ id:p.id, title:p.title, authors:p.authors, venue:p.venue, year:p.year, url:p.url, doi:p.doi, savedOn:today(), note: notes[p.id] || '' });
+      toast('Saved for later');
+    }
+    store.set('ls.saved', saved);
+    if (card) {
+      card.classList.toggle('saved', isSaved(p.id));
+      const b = card.querySelector('.b-save'); b.classList.toggle('on', isSaved(p.id)); b.textContent = isSaved(p.id) ? 'Saved ✓' : 'Save';
+    }
+    updateBadge();
+  }
+  function updateEnd() {
+    const el = $('endStats'); if (!el || !stack) return;
+    const st = saved.filter(s => s.savedOn === today()).length;
+    el.textContent = `${stack.items.length} papers today · ${st} saved today · ${saved.length} in your saved list`;
+  }
+  function updateBadge() {
+    updateEnd();
+    const n = saved.length; $('savedBadge').hidden = !n; $('savedBadge').textContent = n;
+  }
+
+  // ---------- Europe PMC ----------
+  const API = 'https://www.ebi.ac.uk/europepmc/webservices/rest/search';
+  const q = s => '"' + s.replace(/"/g, '') + '"';
+
+  function buildQuery() {
+    const from = new Date(Date.now() - cfg.days * 864e5).toLocaleDateString('en-CA');
+    const parts = [];
+    cfg.kw.forEach(k => parts.push(`TITLE:${q(k)}`, `ABSTRACT:${q(k)}`));
+    cfg.au.forEach(a => parts.push(`AUTH:${q(a)}`));
+    let main;
+    if (cfg.jonly && cfg.jr.length) {
+      const j = cfg.jr.map(x => `JOURNAL:${q(x)}`).join(' OR ');
+      main = parts.length ? `(${j}) AND (${parts.join(' OR ')})` : `(${j})`;
+    } else {
+      cfg.jr.forEach(x => parts.push(`JOURNAL:${q(x)}`));
+      main = `(${parts.join(' OR ')})`;
+    }
+    let query = `${main} AND FIRST_PDATE:[${from} TO ${today()}] AND HAS_ABSTRACT:y`;
+    if (!cfg.pre) query += ' AND NOT SRC:PPR';
+    return query + ' sort_date:y';
+  }
+
+  async function fetchPapers() {
+    const params = new URLSearchParams({ query: buildQuery(), format: 'json', resultType: 'core', pageSize: '200', synonym: 'false' });
+    const r = await fetch(`${API}?${params}`);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    return (j.resultList && j.resultList.result) || [];
+  }
+
+  const strip = s => String(s || '').replace(/<h\d[^>]*>(.*?)<\/h\d>/gi, ' $1: ').replace(/<\/(p|div|li)>/gi, ' ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+
+  function normalize(r) {
+    const isPre = r.source === 'PPR';
+    const venue = isPre
+      ? ((r.bookOrReportDetails && r.bookOrReportDetails.publisher) || 'Preprint')
+      : ((r.journalInfo && r.journalInfo.journal && (r.journalInfo.journal.isoabbreviation || r.journalInfo.journal.title)) || r.journalTitle || 'Journal');
+    const doi = r.doi || '';
+    const url = doi ? `https://doi.org/${doi}` : `https://europepmc.org/article/${r.source}/${r.id}`;
+    return {
+      id: `${r.source}:${r.id}`, isPre, venue, doi, url,
+      journalFull: r.journalInfo && r.journalInfo.journal && r.journalInfo.journal.title || '',
+      title: strip(r.title).replace(/\.$/, ''),
+      authors: strip(r.authorString).replace(/\.$/, ''),
+      abstract: strip(r.abstractText),
+      date: r.firstPublicationDate || '', year: (r.firstPublicationDate || r.pubYear || '').slice(0, 4)
+    };
+  }
+
+  function score(p) {
+    const t = p.title.toLowerCase(), a = p.abstract.toLowerCase(), au = p.authors.toLowerCase();
+    let s = 0; const why = [];
+    for (const k of cfg.kw) {
+      const kk = k.toLowerCase();
+      if (t.includes(kk)) { s += 3; why.push(k); } else if (a.includes(kk)) { s += 1; why.push(k); }
+    }
+    for (const x of cfg.au) { const last = x.toLowerCase().split(/\s+/)[0]; if (last && au.includes(last)) { s += 4; why.push(x); } }
+    for (const x of cfg.jr) {
+      const xx = x.toLowerCase();
+      if ((p.journalFull + ' ' + p.venue).toLowerCase().includes(xx)) { s += 2; why.push(x); }
+    }
+    return { s, why: [...new Set(why)].slice(0, 4) };
+  }
+
+  // ---------- today's stack ----------
+  let stack = null; // {date, items:[paper], extra:[paper]}
+
+  async function build(more) {
+    const feed = $('feed');
+    if (!more) feed.innerHTML = `<div class="slot"><div class="center"><div class="spinner"></div><p>Building today’s stack…</p></div></div>`;
+    try {
+      const raw = await fetchPapers();
+      const fresh = raw.map(normalize).filter(p => p.title && !seen[p.id] && !(stack && stack.items.some(x => x.id === p.id)));
+      fresh.forEach(p => Object.assign(p, score(p)));
+      fresh.sort((a, b) => b.s - a.s || b.date.localeCompare(a.date));
+      if (more && stack) stack.items.push(...fresh.slice(0, 10));
+      else stack = { date: today(), items: fresh.slice(0, cfg.size) };
+      stack.left = Math.max(0, fresh.length - (more ? 10 : cfg.size));
+      store.set('ls.stack', stack);
+      renderFeed(more);
+    } catch (e) {
+      feed.innerHTML = `<div class="slot"><div class="center"><div class="big">📡</div><h2>Couldn’t reach Europe PMC</h2>
+        <p>Check your connection and try again.</p><button class="pill" id="retry">Try again</button></div></div>`;
+      $('retry').onclick = () => build();
+    }
+  }
+
+  function cardHTML(p, i, n) {
+    return `<div class="card${isSaved(p.id) ? ' saved' : ''}">
+      <div class="meta"><span class="src${p.isPre ? ' pre' : ''}">${esc(p.isPre ? p.venue + ' · preprint' : p.venue)}</span><span>${esc(p.date)}</span></div>
+      <h2 class="title">${esc(p.title)}</h2>
+      <div class="authors">${esc(p.authors)}</div>
+      ${noteFor(p.id) ? `<div class="notechip">📝 ${esc(noteFor(p.id))}</div>` : ''}
+      <div class="abs">${esc(p.abstract)}</div>
+      ${p.why && p.why.length ? `<div class="why">${p.why.map(w => `<span>${esc(w)}</span>`).join('')}</div>` : '<div style="height:12px"></div>'}
+      <div class="acts">
+        <button class="b-save${isSaved(p.id) ? ' on' : ''}">${isSaved(p.id) ? 'Saved ✓' : 'Save'}</button>
+        <button class="b-note">${noteFor(p.id) ? 'Edit note' : 'Note'}</button>
+        <a class="b-open" href="${esc(p.url)}" target="_blank" rel="noopener">Open</a>
+      </div>
+      <div class="count">${i + 1} of ${n} · swipe up for next · swipe sideways to save</div>
+    </div>`;
+  }
+
+  let observer = null;
+  function renderFeed(keepPosition) {
+    const feed = $('feed');
+    const top = feed.scrollTop;
+    feed.innerHTML = '';
+    const items = stack.items, n = items.length;
+
+    if (!n) {
+      feed.innerHTML = `<div class="slot"><div class="center"><div class="big">🌱</div><h2>Nothing new today</h2>
+        <p>No new papers matched your field in the last ${cfg.days} days. Try adding topics or looking back further.</p>
+        <button class="pill" id="goSettings">Edit your field</button></div></div>`;
+      $('goSettings').onclick = () => show('settings');
+      return;
+    }
+
+    if (observer) observer.disconnect();
+    observer = new IntersectionObserver(entries => {
+      for (const e of entries) if (e.isIntersecting && e.intersectionRatio > 0.6) {
+        const id = e.target.dataset.id;
+        if (id && !seen[id]) { seen[id] = today(); store.set('ls.seen', seen); }
+      }
+    }, { root: feed, threshold: [0.6] });
+
+    items.forEach((p, i) => {
+      const slot = document.createElement('div'); slot.className = 'slot'; slot.dataset.id = p.id;
+      slot.innerHTML = cardHTML(p, i, n);
+      const card = slot.querySelector('.card');
+      card.querySelector('.b-save').onclick = () => toggleSave(p, card);
+      card.querySelector('.b-note').onclick = () => openNote(p, card);
+      card.addEventListener('click', e => { if (e.target.closest('.notechip')) openNote(p, card); });
+      card.querySelector('.abs').onclick = () => openSheet(p);
+      addSwipe(card, p);
+      feed.appendChild(slot); observer.observe(slot);
+    });
+
+    const end = document.createElement('div'); end.className = 'slot';
+    end.innerHTML = `<div class="center"><div class="big">✅</div><h2>You’re caught up</h2>
+      <p id="endStats"></p>
+      <button class="pill" id="toSaved">See saved papers</button>
+      ${stack.left ? `<button class="pill ghost" id="moreBtn">Show 10 more (${stack.left} left)</button>` : ''}
+      <p style="font-size:13px">Tomorrow’s stack will only show papers you haven’t seen.</p></div>`;
+    feed.appendChild(end); updateEnd();
+    $('toSaved').onclick = () => show('saved');
+    if ($('moreBtn')) $('moreBtn').onclick = () => { $('moreBtn').textContent = 'Loading…'; build(true); };
+    if (keepPosition) feed.scrollTop = top;
+  }
+
+  // Sideways swipe on a card = save (either direction)
+  function addSwipe(card, p) {
+    let x0 = 0, y0 = 0, dx = 0, t0 = 0, tracking = false, decided = false, horiz = false;
+    card.addEventListener('touchstart', e => {
+      const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; t0 = Date.now(); decided = false; horiz = false;
+      tracking = !String(window.getSelection() || '').trim(); // selecting text (e.g. for Look Up): don't swipe
+      card.style.transition = 'none';
+    }, { passive: true });
+    card.addEventListener('touchmove', e => {
+      if (!tracking) return;
+      const t = e.touches[0]; dx = t.clientX - x0; const dy = t.clientY - y0;
+      if (!decided && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) { decided = true; horiz = Math.abs(dx) > Math.abs(dy) * 1.2 && Date.now() - t0 < 350; }
+      if (horiz) { e.preventDefault(); card.style.transform = `translateX(${dx}px) rotate(${dx / 30}deg)`; }
+    }, { passive: false });
+    const end = () => {
+      if (!tracking) return; tracking = false;
+      card.style.transition = '';
+      if (horiz && Math.abs(dx) > 90) {
+        card.style.transform = `translateX(${dx > 0 ? 120 : -120}%) rotate(${dx > 0 ? 8 : -8}deg)`; card.style.opacity = '.4';
+        setTimeout(() => {
+          if (!isSaved(p.id)) toggleSave(p, card); else toast('Already saved');
+          card.style.transition = 'none'; card.style.transform = `translateX(${dx > 0 ? -40 : 40}px)`; card.style.opacity = '1';
+          requestAnimationFrame(() => { card.style.transition = ''; card.style.transform = ''; });
+        }, 220);
+      } else card.style.transform = '';
+    };
+    card.addEventListener('touchend', end); card.addEventListener('touchcancel', end);
+  }
+
+  // ---------- notes ----------
+  let notes = store.get('ls.notes', {}); // draft notes by paper id (also copied into saved items)
+  const noteFor = id => { const sv = saved.find(x => x.id === id); return (sv && sv.note) || notes[id] || ''; };
+  function setNote(id, text) {
+    text = text.trim();
+    if (text) notes[id] = text; else delete notes[id];
+    store.set('ls.notes', notes);
+    const sv = saved.find(x => x.id === id);
+    if (sv) { sv.note = text; store.set('ls.saved', saved); }
+  }
+  function openNote(p, card, after) {
+    $('sheetIn').innerHTML = `<div class="grab"></div>
+      <div class="lbl">Note</div>
+      <div style="font-weight:600;margin-top:4px">${esc(p.title)}</div>
+      <textarea id="noteText" placeholder="Why does this matter to you? Ideas, follow-ups, who to send it to…"></textarea>
+      <div class="acts"><button class="b-save" id="noteSave">${card && !isSaved(p.id) ? 'Save note & paper' : 'Save note'}</button>
+      ${noteFor(p.id) ? '<button class="b-note" id="noteDel">Delete</button>' : ''}</div>
+      ${card && !isSaved(p.id) ? '<div class="hint">Or just save the note — it’ll come along if you save the paper later.</div><div class="acts" style="margin-top:8px"><button class="b-note" id="noteOnly">Save note only</button></div>' : ''}`;
+    $('noteText').value = noteFor(p.id);
+    $('sheet').classList.add('on');
+    setTimeout(() => $('noteText').focus(), 50);
+    const done = (alsoSave) => {
+      setNote(p.id, $('noteText').value);
+      if (alsoSave && card && !isSaved(p.id)) toggleSave(p, card); else toast(noteFor(p.id) ? 'Note saved' : 'Note removed');
+      $('sheet').classList.remove('on');
+      if (card) refreshCard(p, card);
+      if (after) after();
+    };
+    $('noteSave').onclick = () => done(true);
+    if ($('noteOnly')) $('noteOnly').onclick = () => done(false);
+    if ($('noteDel')) $('noteDel').onclick = () => { $('noteText').value = ''; done(false); };
+  }
+  function refreshCard(p, card) {
+    let chip = card.querySelector('.notechip'); const n = noteFor(p.id);
+    if (n && !chip) { chip = document.createElement('div'); chip.className = 'notechip'; card.querySelector('.authors').after(chip); }
+    if (n) chip.textContent = '📝 ' + n; else if (chip) chip.remove();
+    card.querySelector('.b-note').textContent = n ? 'Edit note' : 'Note';
+  }
+
+  function openSheet(p) {
+    $('sheetIn').innerHTML = `<div class="grab"></div>
+      <div class="meta"><span class="src${p.isPre ? ' pre' : ''}">${esc(p.isPre ? p.venue + ' · preprint' : p.venue)}</span><span>${esc(p.date)}</span></div>
+      <h2 class="title">${esc(p.title)}</h2><div class="authors" style="-webkit-line-clamp:unset">${esc(p.authors)}</div>
+      <p>${esc(p.abstract)}</p>
+      <div class="acts"><a class="b-open" href="${esc(p.url)}" target="_blank" rel="noopener">Open paper</a></div>`;
+    $('sheet').classList.add('on');
+  }
+  $('sheet').onclick = e => { if (e.target.id === 'sheet') $('sheet').classList.remove('on'); };
+
+  // ---------- saved screen ----------
+  function cite(s) {
+    return `${s.title}\n${s.authors}. ${s.venue}${s.year ? ' (' + s.year + ')' : ''}.\n${s.url}` + (s.note ? `\nNote: ${s.note}` : '');
+  }
+  function savedText() { return `Papers saved in LitStack (${saved.length})\n\n` + saved.map((s, i) => `${i + 1}. ${cite(s)}`).join('\n\n'); }
+
+  function renderSaved() {
+    $('savedSub').textContent = saved.length ? `${saved.length} paper${saved.length > 1 ? 's' : ''}, newest first.` : 'Nothing saved yet. Swipe a card sideways to save it.';
+    const list = $('savedList'); list.innerHTML = '';
+    saved.forEach(s => {
+      const d = document.createElement('div'); d.className = 'item';
+      d.innerHTML = `<div class="t">${esc(s.title)}</div><div class="m">${esc(s.authors)}</div>
+        <div class="m">${esc(s.venue)}${s.year ? ' · ' + esc(s.year) : ''} · saved ${esc(s.savedOn)}</div>
+        ${s.note ? `<div class="n">📝 ${esc(s.note)}</div>` : ''}
+        <div class="x"><a href="${esc(s.url)}" target="_blank" rel="noopener">Open</a><button class="en">${s.note ? 'Edit note' : 'Add note'}</button><button class="rm">Remove</button></div>`;
+      d.querySelector('.en').onclick = () => openNote(s, null, renderSaved);
+      d.querySelector('.rm').onclick = () => { saved = saved.filter(x => x.id !== s.id); store.set('ls.saved', saved); updateBadge(); renderSaved(); };
+      list.appendChild(d);
+    });
+    ['shareBtn', 'emailBtn', 'copyBtn', 'clearBtn'].forEach(b => $(b).disabled = !saved.length);
+  }
+  $('shareBtn').onclick = async () => {
+    if (navigator.share) { try { await navigator.share({ title: 'Saved papers', text: savedText() }); } catch {} }
+    else $('copyBtn').onclick();
+  };
+  $('emailBtn').onclick = () => {
+    location.href = `mailto:?subject=${encodeURIComponent('Papers to read (' + saved.length + ')')}&body=${encodeURIComponent(savedText())}`;
+  };
+  $('copyBtn').onclick = async () => {
+    try { await navigator.clipboard.writeText(savedText()); toast('Copied'); } catch { toast('Couldn’t copy'); }
+  };
+  let clearArmed = false;
+  $('clearBtn').onclick = () => {
+    if (!clearArmed) { clearArmed = true; $('clearBtn').textContent = 'Tap again to clear all'; setTimeout(() => { clearArmed = false; $('clearBtn').textContent = 'Clear all'; }, 3000); return; }
+    saved = []; store.set('ls.saved', saved); updateBadge(); renderSaved(); clearArmed = false; $('clearBtn').textContent = 'Clear all';
+  };
+
+  // ---------- nav ----------
+  function show(name) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.toggle('on', s.id === 's-' + name));
+    document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.s === name));
+    if (name === 'saved') renderSaved();
+    if (name === 'settings') fillSettings();
+    if (name === 'today' && stack && stack.date !== today()) build();
+  }
+  document.querySelectorAll('nav button').forEach(b => b.onclick = () => show(b.dataset.s));
+
+  let toastT;
+  function toast(t) { const el = $('toast'); el.textContent = t; el.classList.add('on'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('on'), 1600); }
+
+  // ---------- start ----------
+  pruneSeen(); updateBadge();
+  const firstRun = !store.get('ls.cfg', null);
+  if (firstRun) {
+    show('settings');
+    $('saveSettings').textContent = 'Looks good, build my first stack';
+  } else {
+    stack = store.get('ls.stack', null);
+    if (stack && stack.date === today()) renderFeed(); else build();
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && stack && stack.date !== today() && $('s-today').classList.contains('on')) build();
+  });
+})();
+</script>
+</body>
+</html>
